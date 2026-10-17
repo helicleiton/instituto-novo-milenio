@@ -490,6 +490,21 @@
     .g-meta span { display: inline-flex; align-items: center; gap: .4rem; }
     .g-meta i { color: var(--accent); }
 
+    /* Itens vindos da API de mídias */
+    .g-link { position: absolute; inset: 0; z-index: 2; border-radius: inherit; }
+    .g-link:focus-visible { outline: 3px solid var(--accent); outline-offset: -4px; }
+    .g-play {
+      position: absolute; top: 1rem; right: 1rem;
+      width: 42px; height: 42px; border-radius: 50%;
+      background: rgba(255, 255, 255, .92); color: var(--dark);
+      display: grid; place-items: center; font-size: .85rem;
+      transition: transform var(--t), background var(--t);
+    }
+    .g-item:hover .g-play { transform: scale(1.1); background: var(--accent); }
+    .g-desc {
+      font-size: .88rem; color: rgba(255, 255, 255, .85); margin-bottom: .45rem;
+      display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
+    }
     .gallery-foot { margin-top: 2rem; display: flex; flex-wrap: wrap; gap: 1rem; align-items: center; justify-content: space-between; }
     .gallery-foot p { color: var(--muted); font-size: .95rem; }
 
@@ -1707,6 +1722,15 @@
     (function () {
       'use strict';
 
+      /* =========================================================
+         CONFIGURAÇÃO DA GALERIA DINÂMICA
+         Cole aqui a URL do Web App do Apps Script + "?api=midias".
+         Ex.: https://script.google.com/macros/s/AKfy.../exec?api=midias
+         Vazio = mantém os cards fixos da Galeria de Impacto.
+         (Passo a passo em apps-script/LEIA-ME.md)
+         ========================================================= */
+      const MIDIAS_API_URL = '';
+
       const header = document.getElementById('site-header');
       const navMenu = document.getElementById('nav-menu');
       const navToggle = document.getElementById('nav-toggle');
@@ -1883,6 +1907,133 @@
           feedback(legacyCopy(key));
         }
       });
+
+      /* ---------- Galeria dinâmica (mídias aprovadas) ---------- */
+      const GALERIA_MAX = 12;
+      const GALERIA_LAYOUT = ['tall', '', '', 'wide', '', 'wide'];
+      const GALERIA_CATEGORIAS = {
+        musica:        { badge: 'b-musica',    art: 'art-blue', icon: 'fa-solid fa-music' },
+        cordel:        { badge: 'b-cultura',   art: 'art-dark', icon: 'fa-solid fa-feather-pointed' },
+        capoeira:      { badge: 'b-cultura',   art: 'art-sun',  icon: 'fa-solid fa-drum' },
+        eventos:       { badge: 'b-cidadania', art: 'art-sky',  icon: 'fa-solid fa-calendar-days' },
+        institucional: { badge: 'b-cidadania', art: 'art-blue', icon: 'fa-solid fa-building-columns' }
+      };
+
+      function semAcento(txt) {
+        return String(txt || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().trim();
+      }
+
+      function urlSegura(url) {
+        try {
+          const u = new URL(url);
+          return u.protocol === 'https:' ? u.href : '';
+        } catch (err) { return ''; }
+      }
+
+      function criar(tag, classe, texto) {
+        const el = document.createElement(tag);
+        if (classe) el.className = classe;
+        if (texto !== undefined && texto !== null && texto !== '') el.textContent = texto;
+        return el;
+      }
+
+      function icone(classe) {
+        const i = criar('i', classe);
+        i.setAttribute('aria-hidden', 'true');
+        return i;
+      }
+
+      function cardMidia(m, indice) {
+        const cat = GALERIA_CATEGORIAS[semAcento(m.categoria)] || GALERIA_CATEGORIAS.institucional;
+        const card = criar('article', ('g-item ' + (GALERIA_LAYOUT[indice % GALERIA_LAYOUT.length] || '')).trim());
+
+        // Capa: ilustração da categoria + foto/miniatura por cima (se houver)
+        const media = criar('div', 'g-media');
+        const arte = criar('div', 'g-art ' + cat.art);
+        arte.appendChild(icone(m.tipo === 'instagram' ? 'fa-brands fa-instagram' : m.tipo === 'youtube' ? 'fa-brands fa-youtube' : cat.icon));
+        media.appendChild(arte);
+        const imagem = urlSegura(m.imagem);
+        if (imagem) {
+          const img = criar('img');
+          img.src = imagem;
+          img.alt = m.titulo || 'Mídia do Instituto Novo Milênio';
+          img.loading = 'lazy';
+          img.referrerPolicy = 'no-referrer';
+          img.addEventListener('error', function () { img.remove(); });
+          media.appendChild(img);
+        }
+        card.appendChild(media);
+
+        card.appendChild(criar('span', 'g-badge ' + cat.badge, m.categoria || 'Institucional'));
+        if (m.tipo === 'video' || m.tipo === 'youtube') {
+          const play = criar('span', 'g-play');
+          play.appendChild(icone('fa-solid fa-play'));
+          card.appendChild(play);
+        }
+
+        // Texto
+        const info = criar('div', 'g-info');
+        info.appendChild(criar('h3', '', m.titulo || 'Ação do Instituto'));
+        if (m.descricao) info.appendChild(criar('p', 'g-desc', m.descricao));
+        const meta = criar('div', 'g-meta');
+        const local = criar('span');
+        local.appendChild(icone('fa-solid fa-location-dot'));
+        local.appendChild(document.createTextNode(' ' + (m.local || 'Horizonte-CE')));
+        meta.appendChild(local);
+        const ano = m.ano || (m.data ? new Date(m.data).getFullYear() : '');
+        if (ano) {
+          const quando = criar('span');
+          quando.appendChild(icone('fa-regular fa-calendar'));
+          quando.appendChild(document.createTextNode(' ' + ano));
+          meta.appendChild(quando);
+        }
+        info.appendChild(meta);
+        card.appendChild(info);
+
+        // Clique abre a mídia original em nova aba
+        const destino = urlSegura(m.url);
+        if (destino) {
+          const link = criar('a', 'g-link');
+          link.href = destino;
+          link.target = '_blank';
+          link.rel = 'noopener noreferrer';
+          link.setAttribute('aria-label', 'Abrir mídia: ' + (m.titulo || 'sem título') + ' (abre em nova aba)');
+          card.appendChild(link);
+        }
+        return card;
+      }
+
+      function renderGaleria(midias) {
+        const grid = document.querySelector('.gallery-grid');
+        if (!grid || !Array.isArray(midias) || !midias.length) return false;
+        const frag = document.createDocumentFragment();
+        midias.slice(0, GALERIA_MAX).forEach(function (m, i) { frag.appendChild(cardMidia(m || {}, i)); });
+        grid.replaceChildren(frag);
+        return true;
+      }
+
+      function carregarGaleria() {
+        if (!MIDIAS_API_URL) return;
+        const grid = document.querySelector('.gallery-grid');
+        if (grid) grid.setAttribute('aria-busy', 'true');
+        const controle = 'AbortController' in window ? new AbortController() : null;
+        const limite = setTimeout(function () { if (controle) controle.abort(); }, 10000);
+
+        fetch(MIDIAS_API_URL, controle ? { signal: controle.signal } : {})
+          .then(function (r) {
+            if (!r.ok) throw new Error('HTTP ' + r.status);
+            return r.json();
+          })
+          .then(function (dados) { renderGaleria(dados && dados.midias); })
+          .catch(function (err) { console.warn('[Galeria] mantendo cards estáticos:', err.message); })
+          .finally(function () {
+            clearTimeout(limite);
+            if (grid) grid.setAttribute('aria-busy', 'false');
+          });
+      }
+
+      carregarGaleria();
+      window.InstitutoGaleria = { render: renderGaleria, recarregar: carregarGaleria };
 
       /* ---------- Portal de Transparência: PDFs ----------
          Se o PDF ainda não foi publicado na pasta docs/, o botão
