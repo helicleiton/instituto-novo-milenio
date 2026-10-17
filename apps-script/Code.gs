@@ -4,10 +4,12 @@
  * =====================================================================
  *
  *  Fluxo:
- *   1. O presidente envia foto, vídeo ou link pelo Google Forms.
- *   2. Este script (vinculado à planilha de respostas) move o arquivo para
- *      "01_PENDENTES_APROVACAO", registra a mídia na aba "Base_Midias" e
- *      envia um e-mail ao desenvolvedor com os botões Aprovar / Rejeitar.
+ *   1. O presidente abre a página de envio (URL do Web App), digita o código
+ *      de acesso (PIN) e envia fotos, vídeos ou links.
+ *   2. Este script (vinculado à planilha Base_Midias_Instituto) salva cada
+ *      arquivo em "01_PENDENTES_APROVACAO", registra a mídia na aba
+ *      "Base_Midias" e envia um e-mail ao desenvolvedor com os botões
+ *      Aprovar / Rejeitar.
  *   3. O botão abre uma página de confirmação (Web App). Ao confirmar:
  *        - Aprovar  → arquivo vai para "02_APROVADOS", fica público para
  *                     leitura e entra no midias.json.
@@ -20,6 +22,10 @@
  *   - O link do e-mail só ABRE a confirmação (GET). A decisão só é gravada
  *     com o clique em "Confirmar" (POST). Isso evita que o antivírus ou o
  *     pré-carregamento de links do provedor de e-mail aprove algo sozinho.
+ *   - O PIN não fica no código (o repositório é público): ele é guardado
+ *     só como hash nas Propriedades do script, pelo menu "Definir código de
+ *     acesso". Depois de várias tentativas erradas, a página bloqueia novos
+ *     acessos por 15 minutos.
  *   - Funções auxiliares terminam com "_" e por isso não podem ser chamadas
  *     de fora do script. As funções do menu exigem o dono do script.
  *
@@ -60,7 +66,15 @@ const CONFIG = {
   LIMITE_API: 60,
 
   // Cidade exibida nos cards do site.
-  LOCAL_PADRAO: 'Horizonte-CE'
+  LOCAL_PADRAO: 'Horizonte-CE',
+
+  // Página de envio
+  TAMANHO_MAX_MB: 30,          // por arquivo (limite seguro do Apps Script)
+  PIN_MIN_CARACTERES: 6,
+  PIN_MAX_TENTATIVAS: 8,       // erros seguidos antes do bloqueio de 15 min
+  SESSAO_HORAS: 2,             // validade do acesso depois de digitar o PIN
+  MAX_ENVIOS_POR_SESSAO: 40,
+  URL_LOGO: 'https://helicleiton.github.io/instituto-novo-milenio/assets/logo-novo-milenio.png'
 };
 
 /* Colunas da aba Base_Midias. As 7 primeiras são as pedidas; as demais são
@@ -83,7 +97,8 @@ const CHAVE_CACHE = 'midias_json_v1';
 function onOpen() {
   SpreadsheetApp.getUi()
     .createMenu('Mídias do Site')
-    .addItem('1. Configurar pastas, planilha e gatilho', 'configurarTudo')
+    .addItem('1. Configurar pastas e planilha', 'configurarTudo')
+    .addItem('2. Definir código de acesso (PIN)', 'definirPin')
     .addSeparator()
     .addItem('Enviar mídia de teste (gera e-mail)', 'simularEnvio')
     .addItem('Sincronizar status e regenerar midias.json', 'sincronizarERegenerar')
@@ -96,8 +111,8 @@ function onOpen() {
  * =================================================================== */
 
 /**
- * Cria a estrutura no Drive, prepara a planilha e instala o gatilho
- * "Ao enviar formulário". Pode ser executada mais de uma vez sem duplicar nada.
+ * Cria a estrutura no Drive e prepara a planilha.
+ * Pode ser executada mais de uma vez sem duplicar nada.
  */
 function configurarTudo() {
   exigirDono_();
@@ -119,105 +134,216 @@ function configurarTudo() {
   try { DriveApp.getFileById(ss.getId()).moveTo(raiz); } catch (err) { console.warn('Não movi a planilha: ' + err); }
   obterAba_();
 
-  // 3.3 Gatilho "Ao enviar formulário"
-  const jaExiste = ScriptApp.getProjectTriggers().some(function (t) {
-    return t.getHandlerFunction() === 'aoEnviarFormulario';
-  });
-  if (!jaExiste) {
-    ScriptApp.newTrigger('aoEnviarFormulario').forSpreadsheet(ss).onFormSubmit().create();
-  }
-
-  // 3.4 Primeiro midias.json (vazio)
+  // 3.3 Primeiro midias.json (vazio)
   atualizarJsonPublico_();
 
+  const temPin = !!props.getProperty('PIN_HASH');
   const msg = 'Configuração concluída!\n\n' +
     '• Pasta: "' + CONFIG.NOME_PASTA_RAIZ + '" (com as 3 subpastas)\n' +
     '• Aba: "' + CONFIG.NOME_ABA + '"\n' +
-    '• Gatilho: ' + (jaExiste ? 'já existia' : 'instalado') + '\n\n' +
-    'Próximo passo: Implantar > Nova implantação > App da Web.';
+    '• Código de acesso: ' + (temPin ? 'já definido' : 'AINDA NÃO DEFINIDO — use o menu "2. Definir código de acesso"') + '\n\n' +
+    'Depois: Implantar > Nova implantação > App da Web.';
   console.log(msg);
   try { SpreadsheetApp.getUi().alert(msg); } catch (err) { /* rodando pelo editor */ }
 }
 
-
-/* =====================================================================
- * 4. GATILHO: NOVA RESPOSTA DO FORMULÁRIO
- * =================================================================== */
-
 /**
- * Executada pelo gatilho instalável "Ao enviar formulário" da planilha.
- * @param {GoogleAppsScript.Events.SheetsOnFormSubmit} e
+ * Define (ou troca) o código de acesso da página de envio.
+ * O código é guardado só como hash; trocar o PIN derruba as sessões abertas.
  */
-function aoEnviarFormulario(e) {
-  // Só aceita chamadas vindas de um gatilho real deste projeto.
-  const gatilhoValido = e && e.triggerUid && ScriptApp.getProjectTriggers().some(function (t) {
-    return t.getUniqueId() === e.triggerUid;
-  });
-  if (!gatilhoValido || !e.namedValues) throw new Error('aoEnviarFormulario só pode ser executada pelo gatilho do formulário.');
+function definirPin() {
+  exigirDono_();
+  const ui = SpreadsheetApp.getUi();
+  const resp = ui.prompt('Código de acesso da página de envio',
+    'Digite o novo código (mínimo ' + CONFIG.PIN_MIN_CARACTERES + ' caracteres). ' +
+    'Combine números e letras e envie ao presidente por um canal privado.',
+    ui.ButtonSet.OK_CANCEL);
+  if (resp.getSelectedButton() !== ui.Button.OK) return;
 
-  const resp = lerResposta_(e.namedValues);
-  const novos = [];
-  const lock = LockService.getScriptLock();
-  lock.waitLock(30000);
-
-  try {
-    const pendentes = pasta_('PENDENTES');
-    const idsArquivos = extrairIdsDrive_(resp.arquivo);
-
-    // Um registro para cada arquivo enviado
-    idsArquivos.forEach(function (fileId, i) {
-      const id = gerarId_();
-      const arquivo = DriveApp.getFileById(fileId);
-      arquivo.moveTo(pendentes);
-      const sufixo = idsArquivos.length > 1 ? ' (' + (i + 1) + ')' : '';
-      arquivo.setName(id + ' - ' + nomeSeguro_(resp.titulo) + sufixo + extensao_(arquivo.getName()));
-
-      novos.push(registrar_({
-        id: id,
-        titulo: resp.titulo + sufixo,
-        categoria: resp.categoria,
-        url: 'https://drive.google.com/file/d/' + fileId + '/view',
-        descricao: resp.descricao,
-        tipo: arquivo.getMimeType().indexOf('video/') === 0 ? 'video' : 'imagem',
-        fileId: fileId,
-        enviadoPor: resp.email
-      }));
-    });
-
-    // Um registro para o link externo (se houver)
-    if (resp.link) {
-      const url = normalizarUrl_(resp.link);
-      novos.push(registrar_({
-        id: gerarId_(),
-        titulo: resp.titulo,
-        categoria: resp.categoria,
-        url: url,
-        descricao: resp.descricao,
-        tipo: tipoDoLink_(url),
-        fileId: '',
-        enviadoPor: resp.email
-      }));
-    }
-  } finally {
-    lock.releaseLock();
-  }
-
-  if (!novos.length) {
-    MailApp.sendEmail(emailDev_(), '[Site INM] Envio sem arquivo e sem link',
-      'Chegou uma resposta do formulário sem arquivo e sem link.\nTítulo: ' + resp.titulo);
+  const pin = resp.getResponseText().trim();
+  if (pin.length < CONFIG.PIN_MIN_CARACTERES) {
+    ui.alert('Código muito curto. Use pelo menos ' + CONFIG.PIN_MIN_CARACTERES + ' caracteres.');
     return;
   }
-  novos.forEach(notificar_);
+
+  const props = PropertiesService.getScriptProperties();
+  const sal = Utilities.getUuid();
+  props.setProperty('PIN_SAL', sal);
+  props.setProperty('PIN_HASH', hashPin_(pin, sal));
+  props.setProperty('PIN_VERSAO', String(Number(props.getProperty('PIN_VERSAO') || 0) + 1));
+  CacheService.getScriptCache().remove('pin_falhas');
+  ui.alert('Código de acesso salvo. As sessões abertas com o código anterior foram encerradas.');
 }
 
 
 /* =====================================================================
- * 5. WEB APP: API PÚBLICA + PÁGINAS DE APROVAÇÃO
+ * 4. PÁGINA DE ENVIO (chamadas feitas pelo navegador do presidente)
+ *    Estas duas funções são públicas de propósito: é por elas que a
+ *    página Envio.html conversa com o script. As duas validam o acesso.
  * =================================================================== */
 
 /**
+ * Confere o código de acesso e abre uma sessão temporária.
+ * @param {string} pin
+ * @return {{ok:boolean, sessao?:string, msg?:string, config?:Object}}
+ */
+function validarPin(pin) {
+  const cache = CacheService.getScriptCache();
+  const props = PropertiesService.getScriptProperties();
+  const falhas = Number(cache.get('pin_falhas') || 0);
+
+  if (falhas >= CONFIG.PIN_MAX_TENTATIVAS) {
+    return { ok: false, msg: 'Muitas tentativas erradas. Aguarde 15 minutos e tente de novo.' };
+  }
+  const hash = props.getProperty('PIN_HASH');
+  if (!hash) {
+    return { ok: false, msg: 'O código de acesso ainda não foi configurado. Avise o responsável pelo site.' };
+  }
+
+  const informado = String(pin || '').trim();
+  if (!informado || hashPin_(informado, props.getProperty('PIN_SAL')) !== hash) {
+    cache.put('pin_falhas', String(falhas + 1), 900);
+    Utilities.sleep(700); // atrasa tentativas automáticas
+    const restam = CONFIG.PIN_MAX_TENTATIVAS - falhas - 1;
+    return { ok: false, msg: 'Código incorreto.' + (restam > 0 && restam <= 3 ? ' Restam ' + restam + ' tentativa(s).' : '') };
+  }
+
+  cache.remove('pin_falhas');
+  const sessao = Utilities.getUuid().replace(/-/g, '');
+  cache.put('sessao_' + sessao, JSON.stringify({ v: props.getProperty('PIN_VERSAO') || '1', n: 0 }), CONFIG.SESSAO_HORAS * 3600);
+  return {
+    ok: true,
+    sessao: sessao,
+    config: { categorias: CONFIG.CATEGORIAS, tamanhoMaxMB: CONFIG.TAMANHO_MAX_MB }
+  };
+}
+
+/**
+ * Recebe UMA mídia (um arquivo OU um link) e cria o pedido de aprovação.
+ * A página chama esta função uma vez para cada arquivo selecionado.
+ *
+ * @param {string} sessao  valor devolvido por validarPin
+ * @param {{titulo:string, categoria:string, descricao:string, link?:string,
+ *          arquivo?:{nome:string, tipo:string, base64:string}}} dados
+ * @return {{ok:boolean, id?:string, msg?:string, expirou?:boolean}}
+ */
+function enviarMidia(sessao, dados) {
+  const cache = CacheService.getScriptCache();
+  const chave = 'sessao_' + String(sessao || '').replace(/[^a-f0-9]/gi, '');
+  const bruto = cache.get(chave);
+  const versaoAtual = PropertiesService.getScriptProperties().getProperty('PIN_VERSAO') || '1';
+  let estado = null;
+  try { estado = bruto ? JSON.parse(bruto) : null; } catch (err) { estado = null; }
+
+  if (!estado || String(estado.v) !== String(versaoAtual)) {
+    return { ok: false, expirou: true, msg: 'Seu acesso expirou. Digite o código de acesso novamente.' };
+  }
+  if (estado.n >= CONFIG.MAX_ENVIOS_POR_SESSAO) {
+    return { ok: false, expirou: true, msg: 'Limite de envios por acesso atingido. Digite o código novamente para continuar.' };
+  }
+
+  const d = validarDados_(dados);
+  if (d.erro) return { ok: false, msg: d.erro };
+
+  let item;
+  const lock = LockService.getScriptLock();
+  lock.waitLock(30000);
+  try {
+    if (d.arquivo) {
+      const id = gerarId_();
+      const nome = id + ' - ' + nomeSeguro_(d.titulo) + extensao_(d.arquivo.nome);
+      const arquivo = pasta_('PENDENTES').createFile(Utilities.newBlob(d.arquivo.bytes, d.arquivo.tipo, nome));
+      item = registrar_({
+        id: id,
+        titulo: d.titulo,
+        categoria: d.categoria,
+        url: 'https://drive.google.com/file/d/' + arquivo.getId() + '/view',
+        descricao: d.descricao,
+        tipo: d.arquivo.tipo.indexOf('video/') === 0 ? 'video' : 'imagem',
+        fileId: arquivo.getId(),
+        enviadoPor: 'Página de envio (código de acesso)'
+      });
+    } else {
+      item = registrar_({
+        id: gerarId_(),
+        titulo: d.titulo,
+        categoria: d.categoria,
+        url: d.link,
+        descricao: d.descricao,
+        tipo: tipoDoLink_(d.link),
+        fileId: '',
+        enviadoPor: 'Página de envio (código de acesso)'
+      });
+    }
+    estado.n++;
+    cache.put(chave, JSON.stringify(estado), CONFIG.SESSAO_HORAS * 3600);
+  } finally {
+    lock.releaseLock();
+  }
+
+  try {
+    notificar_(item);
+  } catch (err) {
+    console.error('Mídia ' + item.id + ' salva, mas a notificação falhou: ' + err);
+  }
+  return { ok: true, id: item.id };
+}
+
+/** Valida e normaliza o que veio da página. Devolve {erro} ou os dados limpos. */
+function validarDados_(dados) {
+  dados = dados || {};
+  const titulo = String(dados.titulo || '').replace(/\s+/g, ' ').trim();
+  const categoria = String(dados.categoria || '').trim();
+  const descricao = String(dados.descricao || '').trim();
+
+  if (!titulo) return { erro: 'Informe o título da mídia.' };
+  if (titulo.length > 120) return { erro: 'O título pode ter no máximo 120 caracteres.' };
+  if (CONFIG.CATEGORIAS.indexOf(categoria) < 0) return { erro: 'Escolha uma categoria válida.' };
+  if (descricao.length > 500) return { erro: 'A descrição pode ter no máximo 500 caracteres.' };
+
+  const limpo = { titulo: titulo, categoria: categoria, descricao: descricao, link: '', arquivo: null };
+
+  if (dados.arquivo) {
+    const tipo = String(dados.arquivo.tipo || '').toLowerCase();
+    if (!/^(image|video)\/[\w.+-]+$/.test(tipo)) return { erro: 'Envie apenas fotos ou vídeos.' };
+    let bytes;
+    try { bytes = Utilities.base64Decode(String(dados.arquivo.base64 || '')); } catch (err) { return { erro: 'Arquivo corrompido. Tente de novo.' }; }
+    if (!bytes.length) return { erro: 'Arquivo vazio.' };
+    if (bytes.length > CONFIG.TAMANHO_MAX_MB * 1024 * 1024) {
+      return { erro: 'Arquivo maior que ' + CONFIG.TAMANHO_MAX_MB + ' MB. Para vídeos longos, publique no YouTube ou Instagram e envie o link.' };
+    }
+    limpo.arquivo = { nome: String(dados.arquivo.nome || 'arquivo'), tipo: tipo, bytes: bytes };
+    return limpo;
+  }
+
+  if (dados.link) {
+    const bruto = String(dados.link).trim();
+    const erroLink = { erro: 'Link inválido. Cole o endereço completo (https://...).' };
+    // Recusa esquemas que não sejam http(s), como javascript: ou data:
+    if (/^[a-z][a-z0-9+.-]*:/i.test(bruto) && !/^https?:\/\//i.test(bruto)) return erroLink;
+    const url = normalizarUrl_(bruto).replace(/^http:\/\//i, 'https://');
+    if (url.length > 500 || !/^https:\/\/([a-z0-9-]+\.)+[a-z]{2,}(:\d+)?([/?#]\S*)?$/i.test(url)) return erroLink;
+    limpo.link = url;
+    return limpo;
+  }
+
+  return { erro: 'Anexe um arquivo ou cole um link.' };
+}
+
+function hashPin_(pin, sal) {
+  const bytes = Utilities.computeDigest(Utilities.DigestAlgorithm.SHA_256, String(sal) + '|' + String(pin), Utilities.Charset.UTF_8);
+  return bytes.map(function (b) { return ('0' + (b & 0xff).toString(16)).slice(-2); }).join('');
+}
+
+
+/* =====================================================================
+ * 5. WEB APP: PÁGINA DE ENVIO + API PÚBLICA + APROVAÇÃO
+ * =================================================================== */
+
+/**
+ *  (sem parâmetros)               → página de envio para o presidente
  *  ?api=midias                    → JSON das mídias aprovadas (usado pelo site)
- *  ?acao=aprovar&id=...&token=... → página de confirmação
+ *  ?acao=aprovar&id=...&token=... → página de confirmação da aprovação
  */
 function doGet(e) {
   const p = (e && e.parameter) || {};
@@ -232,8 +358,17 @@ function doGet(e) {
     return paginaConfirmacao_(p.acao, p.id, p.token);
   }
 
-  return pagina_('API de mídias', '<p>Este endereço serve as mídias aprovadas do site do Instituto Novo Milênio.</p>' +
-    '<p><a href="?api=midias">Ver JSON das mídias aprovadas</a></p>');
+  const t = HtmlService.createTemplateFromFile('Envio');
+  t.dadosPagina = JSON.stringify({
+    categorias: CONFIG.CATEGORIAS,
+    tamanhoMaxMB: CONFIG.TAMANHO_MAX_MB,
+    urlLogo: CONFIG.URL_LOGO,
+    urlSite: CONFIG.URL_SITE
+  }).replace(/</g, '\\u003c');
+  return t.evaluate()
+    .setTitle('Enviar mídia · Instituto Novo Milênio')
+    .addMetaTag('viewport', 'width=device-width, initial-scale=1, viewport-fit=cover')
+    .setFaviconUrl(CONFIG.URL_LOGO);
 }
 
 /** Recebe o clique em "Confirmar" da página de confirmação. */
@@ -261,7 +396,7 @@ function simularEnvio() {
     descricao: 'Registro de teste criado pelo menu. Pode rejeitar.',
     tipo: 'youtube',
     fileId: '',
-    enviadoPor: 'teste'
+    enviadoPor: 'Teste pelo menu'
   });
   notificar_(item);
   try { SpreadsheetApp.getUi().alert('Mídia de teste criada. Confira seu e-mail.'); } catch (err) { /* editor */ }
@@ -715,34 +850,6 @@ function linhaParaItem_(l) {
 /* =====================================================================
  * 12. UTILITÁRIOS
  * =================================================================== */
-
-/** Lê a resposta do Form pelos títulos das perguntas (ignora acentos e maiúsculas). */
-function lerResposta_(namedValues) {
-  const r = { titulo: '', categoria: '', arquivo: '', link: '', descricao: '', email: '' };
-  Object.keys(namedValues).forEach(function (pergunta) {
-    const chave = pergunta.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
-    const valor = [].concat(namedValues[pergunta]).join(', ').trim();
-    if (!valor) return;
-    if (chave.indexOf('titulo') >= 0) r.titulo = valor;
-    else if (chave.indexOf('categoria') >= 0) r.categoria = valor;
-    else if (chave.indexOf('arquivo') >= 0 || chave.indexOf('upload') >= 0) r.arquivo = valor;
-    else if (chave.indexOf('link') >= 0) r.link = valor;
-    else if (chave.indexOf('descri') >= 0 || chave.indexOf('legenda') >= 0) r.descricao = valor;
-    else if (chave.indexOf('e-mail') >= 0 || chave.indexOf('email') >= 0) r.email = valor;
-  });
-  return r;
-}
-
-/** O Forms grava os uploads como "https://drive.google.com/open?id=XXXX, ...". */
-function extrairIdsDrive_(texto) {
-  const ids = [];
-  const re = /(?:[?&]id=|\/d\/)([-\w]{20,})/g;
-  let m;
-  while ((m = re.exec(texto || '')) !== null) {
-    if (ids.indexOf(m[1]) < 0) ids.push(m[1]);
-  }
-  return ids;
-}
 
 function tipoDoLink_(url) {
   if (/(?:youtube\.com|youtu\.be)/i.test(url)) return 'youtube';

@@ -1,74 +1,62 @@
 # Fluxo de envio e aprovação de mídias — Instituto Novo Milênio
 
-Tudo gratuito, usando apenas uma conta Google: **Google Forms + Planilhas + Drive + Apps Script**.
+Tudo gratuito, com uma única conta Google: **Planilhas + Drive + Apps Script**. Não usa o Google Forms.
 
 ```
-Presidente ──► Google Forms ──► Planilha (gatilho) ──► Apps Script
-                                                     │
-                     ┌───────────────────────────────┤
-                     ▼                               ▼
-         Drive: 01_PENDENTES_APROVACAO     E-mail ao desenvolvedor
-                                           [Aprovar]  [Rejeitar]
-                                                     │
-                                         Página de confirmação (Web App)
-                                                     │
-              ┌──────────────────────────────────────┴───────────────┐
-              ▼                                                      ▼
-   02_APROVADOS + arquivo público                      03_REJEITADOS + privado
-   Status "Aprovado" + midias.json                     Status "Rejeitado"
-              │
-              ▼
-   Site (index.html) ──fetch──► <URL do Web App>?api=midias ──► Galeria de Impacto
+Presidente ──► Página de envio (PIN) ──► Apps Script
+                                        │
+                     ┌──────────────────┤
+                     ▼                  ▼
+         Drive: 01_PENDENTES     E-mail ao desenvolvedor
+                                 [Aprovar]  [Rejeitar]
+                                        │
+                            Página de confirmação
+                                        │
+          ┌─────────────────────────────┴─────────────────┐
+          ▼                                               ▼
+  02_APROVADOS + arquivo público              03_REJEITADOS + privado
+  Status "Aprovado" + midias.json             Status "Rejeitado"
+          │
+          ▼
+  Site ──fetch──► <URL do Web App>?api=midias ──► Galeria de Impacto
 ```
 
-> **Importante:** crie o formulário, a planilha e o script **com a mesma conta Google** (a conta do desenvolvedor ou uma conta institucional do Instituto). Os arquivos enviados pelo Forms ficam no Drive do dono do formulário, e o script só consegue movê-los se ele for o dono.
+**Arquivos desta pasta**
+
+| Arquivo | Para que serve |
+|---|---|
+| `Code.gs` | Toda a lógica: página de envio, PIN, Drive, planilha, e-mails, aprovação e API. |
+| `Envio.html` | A página que o presidente usa no celular para enviar as mídias. |
+| `appsscript.json` | Manifesto do projeto (fuso de Fortaleza, configuração do Web App). |
+
+**Um único endereço** (a URL do Web App, que termina em `/exec`) atende tudo:
+
+| Endereço | O que abre |
+|---|---|
+| `…/exec` | Página de envio do presidente (pede o PIN) |
+| `…/exec?api=midias` | JSON das mídias aprovadas, lido pelo site |
+| `…/exec?acao=aprovar&id=…&token=…` | Confirmação de aprovação (link do e-mail) |
 
 ---
 
-## Passo 1 — Criar o Google Forms do presidente
+## Passo 1 — Criar a planilha e o projeto do Apps Script
 
-1. Acesse **forms.google.com** e crie um formulário em branco chamado **"Envio de Mídias - Site Instituto Novo Milênio"**.
-2. Crie as perguntas **com estes títulos** (o script reconhece as palavras em destaque, sem diferenciar acentos ou maiúsculas):
+> Use a conta Google que vai **guardar os arquivos** (a sua ou uma conta institucional do Instituto). Tudo fica no Drive dessa conta.
 
-| # | Título da pergunta | Tipo | Obrigatória |
-|---|---|---|---|
-| 1 | **Título** da Mídia / Ação | Resposta curta | Sim |
-| 2 | **Categoria** | Múltipla escolha: `Música`, `Cordel`, `Capoeira`, `Eventos`, `Institucional` | Sim |
-| 3 | **Arquivo** (foto ou vídeo) | Upload de arquivo | Não |
-| 4 | **Link** externo (Instagram/YouTube) | Resposta curta | Não |
-| 5 | **Descrição** / Legenda curta | Parágrafo | Não |
+1. Acesse **sheets.new** para criar uma planilha em branco. O nome é trocado sozinho para **Base_Midias_Instituto** no Passo 2.
+2. Na planilha: **Extensões > Apps Script**.
+3. **Code.gs:** apague o conteúdo do arquivo `Código.gs` e cole todo o [`Code.gs`](Code.gs).
+4. **Envio.html:** clique em **+ (Adicionar arquivo) > HTML**, digite o nome **`Envio`** (sem `.html`) e cole todo o [`Envio.html`](Envio.html).
+5. **Manifesto:** em **Configurações do projeto** (engrenagem), marque **"Mostrar arquivo de manifesto appsscript.json no editor"**. Volte ao **Editor** e substitua o `appsscript.json` pelo conteúdo de [`appsscript.json`](appsscript.json).
+6. Salve (Ctrl+S).
 
-3. Na pergunta 3 (Upload de arquivo):
-   - **Permitir apenas tipos de arquivo específicos:** Imagem e Vídeo.
-   - **Número máximo de arquivos:** 10 (cada arquivo vira uma mídia separada para aprovação).
-   - **Tamanho máximo:** 1 GB (ou mais, se a conta tiver espaço).
-4. Na pergunta 4, para validar o link: os três pontinhos da pergunta > **Validação de resposta** > Texto > **É um URL**.
-5. Em **Configurações > Respostas**, ative **Coletar endereços de e-mail** (opcional; o e-mail aparece na notificação como "Enviado por").
+> Opcional: no topo do `Code.gs`, em `CONFIG`, preencha `EMAIL_DESENVOLVEDOR` se os avisos devem ir para outro e-mail. Vazio = e-mail da conta dona.
 
-> O Forms exige que quem envia arquivos esteja logado em uma conta Google. O presidente só precisa da própria conta Gmail.
->
-> Se a pessoa enviar arquivo **e** link na mesma resposta, cada um vira um item separado para aprovação.
-
-## Passo 2 — Vincular a planilha
-
-1. No formulário, abra a aba **Respostas** > **Vincular ao Planilhas** > **Criar uma nova planilha**.
-2. Abra a planilha criada. O nome será trocado automaticamente para **Base_Midias_Instituto** no Passo 4.
-
-> A planilha é um Google Sheets (não um .xlsx). Se precisar de uma cópia em Excel, use **Arquivo > Fazer download > Microsoft Excel (.xlsx)**.
-
-## Passo 3 — Colar o código do Apps Script
-
-1. Na planilha, vá em **Extensões > Apps Script**.
-2. Apague o conteúdo do arquivo `Código.gs` e cole todo o conteúdo de [`Code.gs`](Code.gs).
-3. Clique em **Configurações do projeto** (engrenagem) e marque **"Mostrar arquivo de manifesto appsscript.json no editor"**. Volte ao **Editor**, abra o `appsscript.json` e substitua pelo conteúdo de [`appsscript.json`](appsscript.json) (fuso horário de Fortaleza, runtime V8).
-4. Opcional: no topo do `Code.gs`, em `CONFIG`, preencha `EMAIL_DESENVOLVEDOR` se as notificações devem ir para outro e-mail. Vazio = e-mail da conta dona do script.
-5. Salve (Ctrl+S).
-
-## Passo 4 — Rodar a configuração automática (cria pastas, aba e gatilho)
+## Passo 2 — Rodar a configuração automática
 
 1. No editor, selecione a função **`configurarTudo`** e clique em **Executar**.
-2. Autorize as permissões (Drive, Planilhas, Gmail e acesso externo). Se aparecer "O Google não verificou este app", clique em **Avançado > Acessar (não seguro)**. Isso é normal: o script é seu.
-3. Isso cria no seu Drive:
+2. Autorize as permissões (Drive, Planilhas, Gmail e acesso externo). Se aparecer "O Google não verificou este app", clique em **Avançado > Acessar (não seguro)**. É normal: o script é seu.
+3. Resultado no Drive:
 
 ```
 Instituto Novo Milênio - Mídias do Site/
@@ -79,36 +67,69 @@ Instituto Novo Milênio - Mídias do Site/
 └── midias.json             (cópia de backup do JSON público)
 ```
 
-   - Cria a aba **Base_Midias** com as colunas `ID`, `Data`, `Título`, `Categoria`, `Link_Drive_Ou_URL`, `Descrição` e `Status`, além das colunas de controle `Tipo`, `File_ID`, `Token` (oculta), `Data_Decisao` e `Enviado_Por`.
-   - Instala o gatilho **"Ao enviar formulário" → `aoEnviarFormulario`**. Para conferir: menu lateral **Acionadores** (ícone de relógio).
+   A aba **Base_Midias** é criada com as colunas `ID`, `Data`, `Título`, `Categoria`, `Link_Drive_Ou_URL`, `Descrição` e `Status`, além das colunas de controle `Tipo`, `File_ID`, `Token` (oculta), `Data_Decisao` e `Enviado_Por`.
 
-> **Gatilho manual (alternativa):** em **Acionadores > + Adicionar acionador**, escolha a função `aoEnviarFormulario`, evento **Da planilha**, tipo **Ao enviar o formulário**. Não crie os dois, para não duplicar e-mails.
+4. Recarregue a planilha. Aparece o menu **Mídias do Site**.
 
-Depois disso, ao reabrir a planilha aparece o menu **Mídias do Site**.
+> Não há gatilho para configurar: a própria página de envio chama o script.
 
-## Passo 5 — Implantar o Web App (botões e API)
+## Passo 3 — Definir o código de acesso (PIN)
+
+1. Na planilha: **Mídias do Site > 2. Definir código de acesso (PIN)**.
+2. Digite um código com **pelo menos 6 caracteres**, de preferência misturando letras e números (ex.: `Sopro47Cordel`).
+3. Envie o código ao presidente **por um canal privado** (ligação ou mensagem direta), separado do link.
+
+Como o código é protegido:
+- Ele é guardado só como **hash** nas Propriedades do script, e nunca fica no código (que é público no GitHub).
+- Depois de **8 tentativas erradas**, a página bloqueia novos acessos por 15 minutos.
+- O acesso dura **2 horas**. Depois disso, é preciso digitar o código de novo.
+- Para trocar o código, repita este passo. Quem estava com a página aberta é desconectado na hora.
+
+## Passo 4 — Implantar o Web App
 
 1. No editor: **Implantar > Nova implantação**.
 2. Engrenagem ao lado de "Selecionar tipo" > **App da Web**.
 3. Preencha:
    - **Descrição:** `Mídias do site v1`
-   - **Executar como:** **Eu** (sua conta)
-   - **Quem pode acessar:** **Qualquer pessoa**. Esse acesso é necessário para o site ler a API. Os botões de aprovação continuam protegidos por um token secreto por mídia.
-4. Clique em **Implantar** e copie a **URL do app da Web** (termina em `/exec`).
+   - **Executar como:** **Eu**
+   - **Quem pode acessar:** **Qualquer pessoa**. Esse acesso é necessário para o presidente abrir sem login e para o site ler a API. O envio continua protegido pelo PIN e a aprovação por token.
+4. **Implantar**. Copie a **URL do app da Web** (termina em `/exec`).
 5. Cole essa URL em `CONFIG.URL_WEB_APP` no `Code.gs` e salve.
-6. Publique essa alteração **na mesma implantação**, para a URL não mudar: **Implantar > Gerenciar implantações > ✏️ Editar > Versão: Nova versão > Implantar**.
+6. Publique a alteração **na mesma implantação**, para a URL não mudar: **Implantar > Gerenciar implantações > ✏️ Editar > Versão: Nova versão > Implantar**.
 
-> Sempre que mudar o código, repita o item 6. Uma "Nova implantação" gera **outra URL**, e o site e os e-mails antigos deixariam de funcionar.
+> Sempre que mudar o código, repita o item 6. Uma "Nova implantação" cria **outra URL**, e o link do presidente, o site e os e-mails antigos deixariam de funcionar.
 
-## Passo 6 — Testar o fluxo
+## Passo 5 — Testar
 
-1. Na planilha: **Mídias do Site > Enviar mídia de teste**. Chega um e-mail **"[Site INM] Aprovar mídia: Teste do fluxo de mídias"**.
-2. Clique em **✅ Aprovar Mídia**. Abre a página de confirmação; clique em **Confirmar aprovação**.
+1. Abra a URL `/exec` no celular. Deve aparecer a página **"Enviar fotos e vídeos"** pedindo o código.
+2. Digite o PIN, preencha título e categoria, escolha 1 ou 2 fotos e toque em **Enviar para aprovação**. A barra de progresso mostra cada arquivo.
 3. Confira:
-   - na planilha, o Status mudou para **Aprovado**;
-   - abrindo `SUA_URL/exec?api=midias` no navegador, o JSON lista o item.
-4. Faça um envio real pelo formulário com uma foto. O arquivo deve aparecer em `01_PENDENTES_APROVACAO`, renomeado como `MID-AAAAMMDD-HHMMSS-XXXX - Título.jpg`.
-5. Rejeite a mídia de teste ou apague a linha dela e rode **Sincronizar status e regenerar midias.json**.
+   - os arquivos aparecem em `01_PENDENTES_APROVACAO`, como `MID-AAAAMMDD-HHMMSS-XXXX - Título.jpg`;
+   - a planilha ganhou uma linha por arquivo, com Status **Pendente**;
+   - chegou um e-mail **"[Site INM] Aprovar mídia: …"** para cada item.
+4. No e-mail, clique em **✅ Aprovar Mídia** e depois em **Confirmar aprovação**.
+5. Abra `SUA_URL/exec?api=midias`. A mídia aprovada deve aparecer no JSON.
+
+> Atalho de teste sem a página: **Mídias do Site > Enviar mídia de teste**.
+
+## Passo 6 — Ligar o site
+
+São duas constantes, em dois arquivos do repositório do site:
+
+| Arquivo | Constante | Valor |
+|---|---|---|
+| `index.html` | `MIDIAS_API_URL` | `https://script.google.com/macros/s/SEU_ID/exec?api=midias` |
+| `enviar/index.html` | `URL_PAGINA_ENVIO` | `https://script.google.com/macros/s/SEU_ID/exec` |
+
+Depois:
+
+```bash
+git add index.html enviar/index.html && git commit -m "Conecta galeria e página de envio ao Apps Script" && git push
+```
+
+O que acontece depois disso:
+- A galeria passa a mostrar as mídias aprovadas, das mais recentes para as mais antigas, até 12. Se a API estiver vazia ou fora do ar, ficam os cards fixos atuais.
+- O link curto **https://helicleiton.github.io/instituto-novo-milenio/enviar/** leva direto à página de envio.
 
 Formato da resposta da API:
 
@@ -137,78 +158,70 @@ Formato da resposta da API:
 
 `tipo` pode ser `imagem`, `video`, `youtube`, `instagram` ou `link`.
 
-## Passo 7 — Ligar o site à API
-
-No `index.html`, já está implementada a função que busca e desenha os cards. Basta preencher a constante no início do `<script>`:
-
-```js
-const MIDIAS_API_URL = 'https://script.google.com/macros/s/SEU_ID/exec?api=midias';
-```
-
-Depois:
-
-```bash
-git add index.html && git commit -m "Conecta galeria à API de mídias" && git push
-```
-
-Como funciona:
-- **Com mídias aprovadas:** os cards da "Galeria de Impacto" são substituídos pelas mídias da API, das mais recentes para as mais antigas, até 12 itens.
-- **API vazia, fora do ar ou constante em branco:** continuam aparecendo os cards atuais do site.
-- **Vídeos e YouTube:** mostram um ícone de play e abrem em nova aba.
-- **Instagram:** como não há miniatura pública, aparece uma capa ilustrada com o ícone do Instagram.
-
-Trecho principal (já incluído no `index.html`):
-
-```js
-fetch(MIDIAS_API_URL)
-  .then(r => { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
-  .then(dados => renderGaleria(dados.midias))
-  .catch(err => console.warn('[Galeria] mantendo cards estáticos:', err.message));
-```
-
-## Passo 8 (opcional) — Avisos no Telegram ou Discord
+## Passo 7 (opcional) — Avisos no Telegram ou Discord
 
 **Telegram**
 1. No Telegram, fale com **@BotFather** > `/newbot` e copie o **token**.
-2. Mande qualquer mensagem para o seu bot e abra `https://api.telegram.org/botSEU_TOKEN/getUpdates`. Copie o número em `"chat":{"id": ...}`.
-3. Preencha `CONFIG.TELEGRAM_BOT_TOKEN` e `CONFIG.TELEGRAM_CHAT_ID`. A mensagem chega com os botões **✅ Aprovar** e **❌ Rejeitar**.
+2. Mande uma mensagem ao seu bot e abra `https://api.telegram.org/botSEU_TOKEN/getUpdates`. Copie o número em `"chat":{"id": ...}`.
+3. Preencha `CONFIG.TELEGRAM_BOT_TOKEN` e `CONFIG.TELEGRAM_CHAT_ID`.
 
-**Discord**
-1. No canal: **Editar canal > Integrações > Webhooks > Novo webhook > Copiar URL**.
-2. Cole em `CONFIG.DISCORD_WEBHOOK_URL`.
+**Discord:** em **Editar canal > Integrações > Webhooks > Novo webhook > Copiar URL**, e cole em `CONFIG.DISCORD_WEBHOOK_URL`.
 
-Depois de preencher, publique uma nova versão (Passo 5, item 6).
+> ⚠️ O repositório do site é **público**. Preencha tokens e webhooks **só no editor do Apps Script**, nunca no `Code.gs` do GitHub.
+
+Depois de preencher, publique uma nova versão (Passo 4, item 6).
 
 ---
 
-## Como o presidente usa (rotina)
+## O que enviar ao presidente
 
-1. Abre o link do formulário (salve nos favoritos do celular).
-2. Preenche título, categoria, anexa as fotos/vídeos **ou** cola o link do post/vídeo, e escreve uma legenda curta.
-3. Envia. Não precisa fazer mais nada: a mídia só vai para o site depois da aprovação.
+- **Link:** `https://helicleiton.github.io/instituto-novo-milenio/enviar/`, ou a URL `/exec` diretamente.
+- **Código de acesso:** enviado separadamente, por ligação ou mensagem privada.
+
+Mensagem sugerida:
+
+> Olá! Por este link você envia fotos, vídeos e links das ações do Instituto para o site: https://helicleiton.github.io/instituto-novo-milenio/enviar/
+> O código de acesso eu te passo em outra mensagem. Salve o link nos favoritos do celular.
+> Depois de enviar, a mídia passa por uma revisão antes de aparecer na galeria.
+> Lembrete: fotos de crianças e adolescentes só com a autorização de uso de imagem assinada pelos responsáveis.
+
+## Como a página funciona para o presidente
+
+1. Abre o link e digita o código de acesso.
+2. Preenche o **título** e escolhe a **categoria** (Música, Cordel, Capoeira, Eventos, Institucional).
+3. Toca em **"Toque para escolher ou tirar fotos"** e escolhe várias fotos ou vídeos, até 20 por envio. Também pode colar um **link** do Instagram ou do YouTube.
+4. Escreve uma **legenda curta** (opcional) e toca em **Enviar para aprovação**.
+5. A barra de progresso mostra cada arquivo. No fim, aparece o resumo do que foi recebido.
+
+**Limites:**
+- Cada arquivo pode ter até **30 MB**.
+- Fotos grandes são **reduzidas automaticamente** no celular (máximo de 2000 px), então qualquer foto de câmera passa.
+- **Vídeos acima de 30 MB:** publique no YouTube ou no Instagram e envie o link.
 
 ## Mudar uma decisão
 
-- Altere a coluna **Status** na aba `Base_Midias`, por exemplo de Aprovado para Rejeitado.
-- Rode **Mídias do Site > Sincronizar status e regenerar midias.json**. O arquivo é movido para a pasta certa, o compartilhamento é ajustado e o site se atualiza.
+1. Altere a coluna **Status** na aba `Base_Midias`.
+2. Rode **Mídias do Site > Sincronizar status e regenerar midias.json**. O arquivo vai para a pasta certa, o compartilhamento é ajustado e o site se atualiza.
 
 ## Cuidados importantes
 
-- **Uso de imagem (ECA e LGPD):** fotos e vídeos de crianças e adolescentes só devem ser aprovados com **autorização de uso de imagem assinada pelos responsáveis**. Na dúvida, rejeite.
-- **Arquivos aprovados ficam públicos** ("qualquer pessoa com o link pode ver"), porque é assim que o site consegue exibi-los. Os pendentes e os rejeitados ficam privados.
-- **Contas Google Workspace** podem bloquear o compartilhamento público. Nesse caso, a página de aprovação mostra um aviso, e é preciso pedir ao administrador do domínio para liberar.
-- **Limites gratuitos:** cerca de 100 e-mails por dia (Gmail comum) e 6 minutos por execução. Para uma ONG, sobra.
-- **Miniatura de vídeo do Drive** pode levar alguns minutos para ser gerada depois do upload.
-- **Cache:** a API responde do cache por até 6 horas, mas o cache é renovado na hora a cada aprovação ou rejeição.
+- **Uso de imagem (ECA e LGPD):** fotos e vídeos de crianças e adolescentes só devem ser aprovados com autorização assinada pelos responsáveis. Na dúvida, rejeite.
+- **Arquivos aprovados ficam públicos** ("qualquer pessoa com o link"), porque é assim que o site consegue exibi-los. Pendentes e rejeitados ficam privados.
+- **Aviso do Google:** em contas Gmail comuns, o Google mostra no topo da página a faixa *"Este aplicativo foi criado por um usuário do Google Apps Script"*. É padrão e não dá para remover. O link curto `/enviar/` deixa a entrada mais amigável.
+- **Limites gratuitos:** cerca de 100 e-mails por dia (Gmail comum) e 6 minutos por execução. Cada arquivo é enviado numa chamada separada, então muitos arquivos não estouram o tempo.
+- **Contas Google Workspace** podem bloquear o compartilhamento público. Nesse caso, a página de aprovação avisa, e é preciso liberar com o administrador do domínio.
+- **Miniatura de vídeo do Drive** pode levar alguns minutos para aparecer depois do envio.
 
 ## Problemas comuns
 
 | Sintoma | Causa provável e solução |
 |---|---|
-| Nenhum e-mail chega | Confira em **Acionadores** se `aoEnviarFormulario` existe. Veja erros em **Execuções**. |
-| E-mail chega sem botões | `CONFIG.URL_WEB_APP` vazio ou Web App não implantado (Passo 5). |
-| "Link inválido ou expirado" | O e-mail é de uma mídia já apagada da planilha, ou o link foi cortado pelo cliente de e-mail. |
-| "Pastas não configuradas" | Rode `configurarTudo` de novo pela planilha. |
-| Site continua com os cards antigos | `MIDIAS_API_URL` vazio, nenhuma mídia aprovada ainda, ou a URL é de outra implantação. Abra a URL `?api=midias` no navegador para conferir. |
+| "O código de acesso ainda não foi configurado" | Rode **Mídias do Site > 2. Definir código de acesso**. |
+| "Muitas tentativas erradas" | Aguarde 15 minutos. Se foi você testando, trocar o PIN zera o bloqueio. |
+| Página em branco ou erro "Envio não encontrado" | O arquivo HTML no Apps Script precisa se chamar exatamente **`Envio`**. |
+| "Pastas não configuradas" | Rode `configurarTudo` pela planilha. |
+| Envio funciona, mas o e-mail não chega | Veja **Execuções** no Apps Script. Confira também o spam. |
+| E-mail chega sem botões | `CONFIG.URL_WEB_APP` vazio ou sem nova versão implantada (Passo 4). |
+| Site continua com os cards antigos | `MIDIAS_API_URL` vazio, nada aprovado ainda, ou URL de outra implantação. Abra `?api=midias` no navegador para conferir. |
 | Imagem quebrada no site | O arquivo não está público. Rode **Sincronizar** ou verifique a política do domínio. |
-| Erro "Ação permitida apenas para o dono do script" | Funções do menu só rodam com a conta dona do script. |
+| "Ação permitida apenas para o dono do script" | Funções do menu só rodam com a conta dona do script. |

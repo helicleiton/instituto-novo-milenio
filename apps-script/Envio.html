@@ -1,0 +1,551 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <base target="_top">
+  <meta charset="utf-8">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" referrerpolicy="no-referrer">
+  <style>
+    :root {
+      --primary: #0284c7;
+      --primary-dark: #0369a1;
+      --primary-soft: #e0f2fe;
+      --accent: #f59e0b;
+      --gold: #d97706;
+      --accent-soft: #fef3c7;
+      --dark: #0f172a;
+      --light: #f8fafc;
+      --white: #ffffff;
+      --text: #334155;
+      --muted: #64748b;
+      --border: #e2e8f0;
+      --ok: #16a34a;
+      --ok-soft: #dcfce7;
+      --erro: #dc2626;
+      --erro-soft: #fee2e2;
+      --font: 'Plus Jakarta Sans', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+      --flags: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='34' viewBox='0 0 120 34'%3E%3Cpath d='M0 3 Q60 11 120 3' fill='none' stroke='%2394a3b8' stroke-width='1'/%3E%3Cpath d='M6 4.2 L26 6.4 L16 26 Z' fill='%230284c7'/%3E%3Cpath d='M36 6.6 L56 7.4 L46 28 Z' fill='%23f59e0b'/%3E%3Cpath d='M66 7.4 L86 6.4 L76 28 Z' fill='%23ffffff'/%3E%3Cpath d='M96 5.6 L116 3.6 L106 25 Z' fill='%23d97706'/%3E%3C/svg%3E");
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    html { -webkit-text-size-adjust: 100%; }
+    body { font-family: var(--font); background: var(--light); color: var(--text); line-height: 1.6; min-height: 100vh; }
+    button, input, textarea { font: inherit; color: inherit; }
+    :focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; border-radius: 8px; }
+    [hidden] { display: none !important; }
+
+    .topo { background: var(--dark); color: var(--white); }
+    .topo-in { max-width: 640px; margin: 0 auto; padding: 1.1rem 1rem; display: flex; align-items: center; gap: .85rem; }
+    .topo img { width: 48px; height: 48px; border-radius: 50%; background: var(--white); box-shadow: 0 0 0 3px rgba(255,255,255,.9); }
+    .topo strong { display: block; font-size: 1.05rem; line-height: 1.2; }
+    .topo small { font-size: .72rem; letter-spacing: .14em; text-transform: uppercase; color: var(--accent); font-weight: 700; }
+    .bandeiras { height: 34px; background: var(--dark) var(--flags) repeat-x left top / 120px 34px; }
+
+    main { max-width: 640px; margin: 0 auto; padding: 1.25rem 1rem 3rem; }
+    .cartao { background: var(--white); border: 1px solid var(--border); border-radius: 20px; padding: 1.5rem 1.25rem; box-shadow: 0 12px 32px -18px rgba(15,23,42,.25); }
+    h1 { font-size: 1.45rem; color: var(--dark); line-height: 1.25; letter-spacing: -.02em; margin-bottom: .35rem; }
+    .sub { color: var(--muted); font-size: .95rem; margin-bottom: 1.4rem; }
+
+    .campo { margin-bottom: 1.25rem; }
+    .campo > label, .campo > .rotulo { display: block; font-weight: 700; color: var(--dark); font-size: .95rem; margin-bottom: .45rem; }
+    .campo .dica { display: block; font-weight: 500; color: var(--muted); font-size: .82rem; margin-top: .1rem; }
+    .entrada {
+      width: 100%; padding: .85rem 1rem; border-radius: 12px;
+      border: 1.5px solid var(--border); background: var(--white);
+      font-size: 1rem; transition: border-color .2s, box-shadow .2s;
+    }
+    .entrada:focus { outline: none; border-color: var(--primary); box-shadow: 0 0 0 4px var(--primary-soft); }
+    textarea.entrada { min-height: 96px; resize: vertical; }
+    .contador { text-align: right; font-size: .78rem; color: var(--muted); margin-top: .25rem; }
+
+    .pin-entrada { font-size: 1.4rem; letter-spacing: .3em; text-align: center; font-weight: 700; }
+
+    .chips { display: flex; flex-wrap: wrap; gap: .5rem; }
+    .chip { position: relative; }
+    .chip input { position: absolute; opacity: 0; pointer-events: none; }
+    .chip span {
+      display: inline-flex; align-items: center; gap: .45rem;
+      padding: .6rem 1rem; border-radius: 999px;
+      border: 1.5px solid var(--border); background: var(--white);
+      font-weight: 600; font-size: .92rem; cursor: pointer;
+      transition: background .2s, border-color .2s, color .2s;
+    }
+    .chip span i { color: var(--primary); }
+    .chip input:checked + span { background: var(--primary); border-color: var(--primary); color: var(--white); }
+    .chip input:checked + span i { color: var(--accent); }
+    .chip input:focus-visible + span { outline: 3px solid var(--accent); outline-offset: 2px; }
+
+    .soltar {
+      display: flex; flex-direction: column; align-items: center; justify-content: center; gap: .4rem;
+      padding: 1.6rem 1rem; border: 2px dashed var(--accent); border-radius: 16px;
+      background: #fffbeb; text-align: center; cursor: pointer;
+      transition: background .2s, border-color .2s;
+    }
+    .campo > label.soltar { display: flex; margin-bottom: 0; font-weight: 500; }
+    .soltar:hover, .soltar.arrastando { background: var(--accent-soft); border-color: var(--gold); }
+    .soltar i { font-size: 1.8rem; color: var(--gold); }
+    .soltar strong { color: var(--dark); }
+    .soltar small { color: var(--muted); font-size: .82rem; }
+    .soltar input { position: absolute; width: 1px; height: 1px; opacity: 0; }
+
+    .lista { display: grid; grid-template-columns: repeat(auto-fill, minmax(96px, 1fr)); gap: .6rem; margin-top: .85rem; }
+    .miniatura { position: relative; aspect-ratio: 1; border-radius: 12px; overflow: hidden; background: var(--primary-soft); display: grid; place-items: center; color: var(--primary-dark); }
+    .miniatura img, .miniatura video { width: 100%; height: 100%; object-fit: cover; }
+    .miniatura .tam { position: absolute; left: 4px; bottom: 4px; font-size: .68rem; font-weight: 700; background: rgba(15,23,42,.75); color: var(--white); padding: .05rem .4rem; border-radius: 6px; }
+    .miniatura .tipo { position: absolute; left: 4px; top: 4px; font-size: .7rem; color: var(--white); background: rgba(15,23,42,.75); width: 22px; height: 22px; border-radius: 6px; display: grid; place-items: center; }
+    .miniatura button { position: absolute; right: 4px; top: 4px; width: 28px; height: 28px; border-radius: 50%; border: 0; background: rgba(255,255,255,.95); color: var(--erro); cursor: pointer; display: grid; place-items: center; box-shadow: 0 2px 6px rgba(0,0,0,.2); }
+
+    .ou { display: flex; align-items: center; gap: .75rem; color: var(--muted); font-size: .82rem; font-weight: 700; text-transform: uppercase; letter-spacing: .1em; margin: 1.25rem 0; }
+    .ou::before, .ou::after { content: ''; flex: 1; height: 1px; background: var(--border); }
+
+    .botao {
+      width: 100%; display: inline-flex; align-items: center; justify-content: center; gap: .6rem;
+      padding: 1rem 1.25rem; border-radius: 14px; border: 0; cursor: pointer;
+      font-weight: 800; font-size: 1.02rem;
+      background: var(--accent); color: var(--dark);
+      transition: background .2s, transform .2s;
+    }
+    .botao:hover { background: var(--gold); color: var(--white); }
+    .botao:active { transform: scale(.99); }
+    .botao:disabled { opacity: .6; cursor: not-allowed; }
+    .botao.secundario { background: var(--primary-soft); color: var(--primary-dark); }
+    .botao.secundario:hover { background: var(--primary); color: var(--white); }
+
+    .aviso { display: flex; gap: .65rem; align-items: flex-start; padding: .85rem 1rem; border-radius: 12px; font-size: .9rem; margin-bottom: 1rem; }
+    .aviso i { margin-top: .2rem; }
+    .aviso.erro { background: var(--erro-soft); color: #991b1b; }
+    .aviso.info { background: var(--primary-soft); color: var(--primary-dark); }
+    .aviso.alerta { background: var(--accent-soft); color: #78350f; }
+
+    .progresso { margin: 1.25rem 0 1rem; }
+    .barra { height: 12px; border-radius: 999px; background: var(--primary-soft); overflow: hidden; }
+    .barra span { display: block; height: 100%; width: 0; background: linear-gradient(90deg, var(--primary), var(--primary-dark)); border-radius: inherit; transition: width .35s ease; }
+    .progresso p { display: flex; justify-content: space-between; font-size: .88rem; margin-top: .45rem; color: var(--muted); }
+    .progresso p strong { color: var(--dark); }
+
+    .resultado { display: grid; gap: .45rem; margin-top: .75rem; }
+    .resultado li { list-style: none; display: flex; gap: .6rem; align-items: flex-start; font-size: .9rem; padding: .55rem .75rem; border-radius: 10px; background: var(--light); }
+    .resultado li.ok i { color: var(--ok); }
+    .resultado li.erro i { color: var(--erro); }
+    .resultado li.envio i { color: var(--primary); }
+    .resultado li span { word-break: break-word; }
+
+    .sucesso { text-align: center; padding: .5rem 0 1rem; }
+    .sucesso .icone { width: 76px; height: 76px; margin: 0 auto 1rem; border-radius: 50%; background: var(--ok-soft); color: var(--ok); display: grid; place-items: center; font-size: 2rem; }
+
+    .rodape { text-align: center; color: var(--muted); font-size: .8rem; margin-top: 1.5rem; }
+    .rodape a { color: var(--primary-dark); font-weight: 600; }
+    .sair { background: none; border: 0; color: var(--muted); font-size: .85rem; text-decoration: underline; cursor: pointer; margin-top: 1rem; }
+  </style>
+</head>
+<body>
+  <header class="topo">
+    <div class="topo-in">
+      <img id="logo" alt="Logo do Instituto Novo Milênio">
+      <div>
+        <small>Mídias do site</small>
+        <strong>Instituto Novo Milênio</strong>
+      </div>
+    </div>
+  </header>
+  <div class="bandeiras" aria-hidden="true"></div>
+
+  <main>
+    <!-- ======================= 1. CÓDIGO DE ACESSO ======================= -->
+    <section class="cartao" id="tela-pin" aria-labelledby="t-pin">
+      <h1 id="t-pin">Enviar fotos e vídeos</h1>
+      <p class="sub">Digite o código de acesso para enviar mídias das ações do Instituto para a galeria do site.</p>
+      <div class="aviso erro" id="pin-erro" role="alert" hidden></div>
+      <form id="form-pin" autocomplete="off">
+        <div class="campo">
+          <label for="pin">Código de acesso</label>
+          <input class="entrada pin-entrada" id="pin" name="pin" type="password" inputmode="text" autocomplete="current-password" required minlength="4" maxlength="64">
+        </div>
+        <button class="botao" type="submit" id="btn-pin"><i class="fa-solid fa-lock-open" aria-hidden="true"></i> Entrar</button>
+      </form>
+    </section>
+
+    <!-- ======================= 2. FORMULÁRIO ======================= -->
+    <section class="cartao" id="tela-envio" aria-labelledby="t-envio" hidden>
+      <h1 id="t-envio">Nova mídia para a galeria</h1>
+      <p class="sub">Tudo o que você enviar passa por uma revisão antes de aparecer no site.</p>
+      <div class="aviso erro" id="envio-erro" role="alert" hidden></div>
+
+      <form id="form-envio" novalidate>
+        <div class="campo">
+          <label for="titulo">Título da mídia / ação <span class="dica">Ex.: Oficina de Sopros – turma da tarde</span></label>
+          <input class="entrada" id="titulo" name="titulo" type="text" maxlength="120" required>
+        </div>
+
+        <fieldset class="campo" style="border:0">
+          <legend class="rotulo">Categoria</legend>
+          <div class="chips" id="categorias"></div>
+        </fieldset>
+
+        <div class="campo">
+          <span class="rotulo">Fotos ou vídeos</span>
+          <label class="soltar" id="soltar" for="arquivos">
+            <i class="fa-solid fa-cloud-arrow-up" aria-hidden="true"></i>
+            <strong>Toque para escolher ou tirar fotos</strong>
+            <small id="dica-arquivos">Várias de uma vez. Fotos grandes são reduzidas automaticamente.</small>
+            <input id="arquivos" type="file" accept="image/*,video/*" multiple>
+          </label>
+          <div class="lista" id="lista" aria-live="polite"></div>
+        </div>
+
+        <div class="ou">ou</div>
+
+        <div class="campo">
+          <label for="link">Link do Instagram ou YouTube <span class="dica">Use para vídeos longos: publique e cole o link aqui.</span></label>
+          <input class="entrada" id="link" name="link" type="url" inputmode="url" placeholder="https://www.instagram.com/p/..." autocomplete="off">
+        </div>
+
+        <div class="campo">
+          <label for="descricao">Descrição / legenda curta <span class="dica">Opcional</span></label>
+          <textarea class="entrada" id="descricao" name="descricao" maxlength="500"></textarea>
+          <div class="contador"><span id="contador">0</span>/500</div>
+        </div>
+
+        <div class="aviso alerta">
+          <i class="fa-solid fa-child-reaching" aria-hidden="true"></i>
+          <span>Fotos e vídeos de crianças e adolescentes só com a <strong>autorização de uso de imagem</strong> assinada pelos responsáveis.</span>
+        </div>
+
+        <button class="botao" type="submit" id="btn-enviar"><i class="fa-solid fa-paper-plane" aria-hidden="true"></i> Enviar para aprovação</button>
+      </form>
+
+      <div id="area-progresso" hidden>
+        <div class="progresso" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" id="barra-aria">
+          <div class="barra"><span id="barra"></span></div>
+          <p><strong id="progresso-texto">Preparando…</strong><span id="progresso-pct">0%</span></p>
+        </div>
+        <p class="sub" style="margin:0">Não feche esta página até terminar.</p>
+        <ul class="resultado" id="resultado"></ul>
+      </div>
+
+      <div style="text-align:center"><button type="button" class="sair" id="btn-sair">Sair</button></div>
+    </section>
+
+    <!-- ======================= 3. CONCLUÍDO ======================= -->
+    <section class="cartao" id="tela-fim" aria-labelledby="t-fim" hidden>
+      <div class="sucesso">
+        <div class="icone"><i class="fa-solid fa-check" aria-hidden="true"></i></div>
+        <h1 id="t-fim">Enviado com sucesso!</h1>
+        <p class="sub" id="fim-texto">As mídias foram recebidas e aguardam aprovação.</p>
+      </div>
+      <ul class="resultado" id="fim-lista"></ul>
+      <div style="display:grid;gap:.6rem;margin-top:1.25rem">
+        <button class="botao" type="button" id="btn-novo"><i class="fa-solid fa-plus" aria-hidden="true"></i> Enviar outra mídia</button>
+        <a class="botao secundario" id="link-site" target="_blank" rel="noopener"><i class="fa-solid fa-images" aria-hidden="true"></i> Ver a galeria do site</a>
+      </div>
+    </section>
+
+    <p class="rodape">Instituto Novo Milênio · Horizonte - CE</p>
+  </main>
+
+  <script>
+    (function () {
+      'use strict';
+
+      /* Dados enviados pelo servidor (doGet) */
+      var PAGINA = <?!= dadosPagina ?>;
+      var LIMITE = PAGINA.tamanhoMaxMB * 1024 * 1024;
+      var ICONES = { 'Música': 'fa-music', 'Cordel': 'fa-feather-pointed', 'Capoeira': 'fa-drum', 'Eventos': 'fa-calendar-days', 'Institucional': 'fa-building-columns' };
+
+      var $ = function (id) { return document.getElementById(id); };
+      var sessao = null;
+      var selecionados = []; // { arquivo: File, url: string }
+
+      $('logo').src = PAGINA.urlLogo;
+      $('link-site').href = PAGINA.urlSite + '#galeria';
+      $('dica-arquivos').textContent = 'Várias de uma vez · até ' + PAGINA.tamanhoMaxMB + ' MB por arquivo. Fotos grandes são reduzidas automaticamente.';
+
+      /* ---------- utilidades ---------- */
+      function chamar(funcao) {
+        var args = Array.prototype.slice.call(arguments, 1);
+        return new Promise(function (resolve, reject) {
+          var r = google.script.run.withSuccessHandler(resolve).withFailureHandler(reject);
+          r[funcao].apply(r, args);
+        });
+      }
+
+      function mostrar(tela) {
+        ['tela-pin', 'tela-envio', 'tela-fim'].forEach(function (id) { $(id).hidden = id !== tela; });
+        window.scrollTo(0, 0);
+      }
+
+      function erro(id, msg) {
+        var el = $(id);
+        if (!msg) { el.hidden = true; el.textContent = ''; return; }
+        el.innerHTML = '';
+        var i = document.createElement('i'); i.className = 'fa-solid fa-circle-exclamation'; i.setAttribute('aria-hidden', 'true');
+        var s = document.createElement('span'); s.textContent = msg;
+        el.appendChild(i); el.appendChild(s);
+        el.hidden = false;
+        el.scrollIntoView({ block: 'center', behavior: 'smooth' });
+      }
+
+      function tamanho(bytes) {
+        return bytes >= 1048576 ? (bytes / 1048576).toFixed(1).replace('.', ',') + ' MB' : Math.max(1, Math.round(bytes / 1024)) + ' KB';
+      }
+
+      function linhaResultado(lista, classe, icone, texto) {
+        var li = document.createElement('li');
+        li.className = classe;
+        var i = document.createElement('i'); i.className = 'fa-solid ' + icone; i.setAttribute('aria-hidden', 'true');
+        var s = document.createElement('span'); s.textContent = texto;
+        li.appendChild(i); li.appendChild(s);
+        lista.appendChild(li);
+        return li;
+      }
+
+      /* ---------- categorias ---------- */
+      PAGINA.categorias.forEach(function (cat, n) {
+        var label = document.createElement('label'); label.className = 'chip';
+        var input = document.createElement('input'); input.type = 'radio'; input.name = 'categoria'; input.value = cat;
+        if (n === 0) input.required = true;
+        var span = document.createElement('span');
+        var i = document.createElement('i'); i.className = 'fa-solid ' + (ICONES[cat] || 'fa-tag'); i.setAttribute('aria-hidden', 'true');
+        span.appendChild(i); span.appendChild(document.createTextNode(cat));
+        label.appendChild(input); label.appendChild(span);
+        $('categorias').appendChild(label);
+      });
+
+      /* ---------- 1. código de acesso ---------- */
+      $('form-pin').addEventListener('submit', function (e) {
+        e.preventDefault();
+        erro('pin-erro', '');
+        var btn = $('btn-pin');
+        btn.disabled = true;
+        btn.lastChild.textContent = ' Verificando…';
+        chamar('validarPin', $('pin').value)
+          .then(function (r) {
+            if (!r || !r.ok) { erro('pin-erro', (r && r.msg) || 'Não foi possível validar o código.'); return; }
+            sessao = r.sessao;
+            if (r.config && r.config.tamanhoMaxMB) LIMITE = r.config.tamanhoMaxMB * 1024 * 1024;
+            $('pin').value = '';
+            mostrar('tela-envio');
+            $('titulo').focus();
+          })
+          .catch(function () { erro('pin-erro', 'Sem conexão com o servidor. Verifique a internet e tente de novo.'); })
+          .finally(function () { btn.disabled = false; btn.lastChild.textContent = ' Entrar'; });
+      });
+
+      $('btn-sair').addEventListener('click', function () {
+        sessao = null;
+        limparFormulario();
+        mostrar('tela-pin');
+      });
+
+      /* ---------- seleção de arquivos ---------- */
+      function adicionar(arquivos) {
+        erro('envio-erro', '');
+        var recusados = [];
+        Array.prototype.forEach.call(arquivos, function (f) {
+          var ehImagem = /^image\//.test(f.type), ehVideo = /^video\//.test(f.type);
+          if (!ehImagem && !ehVideo) { recusados.push(f.name + ' (não é foto nem vídeo)'); return; }
+          if (ehVideo && f.size > LIMITE) { recusados.push(f.name + ' (' + tamanho(f.size) + ': publique no YouTube/Instagram e envie o link)'); return; }
+          if (selecionados.length >= 20) { recusados.push(f.name + ' (máximo de 20 arquivos por envio)'); return; }
+          selecionados.push({ arquivo: f, url: URL.createObjectURL(f) });
+        });
+        desenharLista();
+        if (recusados.length) erro('envio-erro', 'Não adicionados: ' + recusados.join('; ') + '.');
+      }
+
+      function desenharLista() {
+        var lista = $('lista');
+        lista.innerHTML = '';
+        selecionados.forEach(function (s, idx) {
+          var box = document.createElement('div'); box.className = 'miniatura';
+          var video = /^video\//.test(s.arquivo.type);
+          var midia = document.createElement(video ? 'video' : 'img');
+          midia.src = s.url;
+          if (video) { midia.muted = true; midia.preload = 'metadata'; } else { midia.alt = s.arquivo.name; }
+          box.appendChild(midia);
+          var tipo = document.createElement('span'); tipo.className = 'tipo';
+          tipo.innerHTML = '<i class="fa-solid ' + (video ? 'fa-video' : 'fa-image') + '" aria-hidden="true"></i>';
+          box.appendChild(tipo);
+          var tam = document.createElement('span'); tam.className = 'tam'; tam.textContent = tamanho(s.arquivo.size);
+          box.appendChild(tam);
+          var rem = document.createElement('button'); rem.type = 'button';
+          rem.setAttribute('aria-label', 'Remover ' + s.arquivo.name);
+          rem.innerHTML = '<i class="fa-solid fa-xmark" aria-hidden="true"></i>';
+          rem.addEventListener('click', function () {
+            URL.revokeObjectURL(s.url);
+            selecionados.splice(idx, 1);
+            desenharLista();
+          });
+          box.appendChild(rem);
+          lista.appendChild(box);
+        });
+      }
+
+      $('arquivos').addEventListener('change', function (e) { adicionar(e.target.files); e.target.value = ''; });
+      var zona = $('soltar');
+      ['dragenter', 'dragover'].forEach(function (ev) { zona.addEventListener(ev, function (e) { e.preventDefault(); zona.classList.add('arrastando'); }); });
+      ['dragleave', 'drop'].forEach(function (ev) { zona.addEventListener(ev, function (e) { e.preventDefault(); zona.classList.remove('arrastando'); }); });
+      zona.addEventListener('drop', function (e) { if (e.dataTransfer) adicionar(e.dataTransfer.files); });
+
+      $('descricao').addEventListener('input', function () { $('contador').textContent = this.value.length; });
+
+      /* ---------- preparo dos arquivos ---------- */
+      // Reduz fotos grandes para no máximo 2000 px (JPEG 85%), mantendo a orientação.
+      function reduzirFoto(arquivo) {
+        var ehFotoReduzivel = /^image\/(jpeg|png|webp|heic|heif)$/i.test(arquivo.type);
+        if (!ehFotoReduzivel || !window.createImageBitmap) return Promise.resolve(arquivo);
+        return createImageBitmap(arquivo, { imageOrientation: 'from-image' }).then(function (bmp) {
+          var maior = Math.max(bmp.width, bmp.height);
+          if (maior <= 2400 && arquivo.size <= 3 * 1048576) { bmp.close && bmp.close(); return arquivo; }
+          var escala = Math.min(1, 2000 / maior);
+          var canvas = document.createElement('canvas');
+          canvas.width = Math.round(bmp.width * escala);
+          canvas.height = Math.round(bmp.height * escala);
+          canvas.getContext('2d').drawImage(bmp, 0, 0, canvas.width, canvas.height);
+          bmp.close && bmp.close();
+          return new Promise(function (res) {
+            canvas.toBlob(function (blob) {
+              if (!blob || blob.size >= arquivo.size) { res(arquivo); return; }
+              var nome = arquivo.name.replace(/\.[^.]+$/, '') + '.jpg';
+              try { res(new File([blob], nome, { type: 'image/jpeg' })); } catch (err) { blob.name = nome; res(blob); }
+            }, 'image/jpeg', 0.85);
+          });
+        }).catch(function () { return arquivo; });
+      }
+
+      function lerBase64(blob) {
+        return new Promise(function (res, rej) {
+          var leitor = new FileReader();
+          leitor.onload = function () { res(String(leitor.result).split(',')[1] || ''); };
+          leitor.onerror = function () { rej(new Error('Não foi possível ler o arquivo.')); };
+          leitor.readAsDataURL(blob);
+        });
+      }
+
+      /* ---------- progresso ---------- */
+      function progresso(feitos, parcial, total, texto) {
+        var pct = total ? Math.round(((feitos + parcial) / total) * 100) : 0;
+        $('barra').style.width = pct + '%';
+        $('barra-aria').setAttribute('aria-valuenow', String(pct));
+        $('progresso-pct').textContent = pct + '%';
+        $('progresso-texto').textContent = texto;
+      }
+
+      /* ---------- 2. envio ---------- */
+      $('form-envio').addEventListener('submit', function (e) {
+        e.preventDefault();
+        erro('envio-erro', '');
+
+        var titulo = $('titulo').value.replace(/\s+/g, ' ').trim();
+        var catInput = document.querySelector('input[name="categoria"]:checked');
+        var link = $('link').value.trim();
+        var descricao = $('descricao').value.trim();
+
+        if (!titulo) { erro('envio-erro', 'Informe o título da mídia.'); $('titulo').focus(); return; }
+        if (!catInput) { erro('envio-erro', 'Escolha uma categoria.'); return; }
+        if (!selecionados.length && !link) { erro('envio-erro', 'Escolha pelo menos uma foto/vídeo ou cole um link.'); return; }
+        if (link && !/^(https?:\/\/)?[^\s.]+\.[^\s]{2,}/i.test(link)) { erro('envio-erro', 'O link parece incompleto. Cole o endereço inteiro.'); $('link').focus(); return; }
+
+        var base = { titulo: titulo, categoria: catInput.value, descricao: descricao };
+        var tarefas = selecionados.map(function (s, i) {
+          return { tipo: 'arquivo', arquivo: s.arquivo, titulo: selecionados.length > 1 ? titulo + ' (' + (i + 1) + ')' : titulo };
+        });
+        if (link) tarefas.push({ tipo: 'link', link: link, titulo: titulo });
+
+        $('form-envio').hidden = true;
+        $('btn-sair').hidden = true;
+        $('area-progresso').hidden = false;
+        $('resultado').innerHTML = '';
+        var total = tarefas.length, feitos = 0, okList = [], erros = [];
+
+        function proxima(i) {
+          if (i >= total) { concluir(); return; }
+          var t = tarefas[i];
+          var rotulo = t.tipo === 'link' ? 'link' : (/^video\//.test(t.arquivo.type) ? 'vídeo' : 'foto');
+          var linha = linhaResultado($('resultado'), 'envio', 'fa-spinner fa-spin', (t.tipo === 'link' ? t.link : t.arquivo.name) + ' — enviando…');
+          progresso(feitos, 0.05, total, 'Enviando ' + rotulo + ' ' + (i + 1) + ' de ' + total + '…');
+
+          var preparar = t.tipo === 'link'
+            ? Promise.resolve(Object.assign({}, base, { titulo: t.titulo, link: t.link }))
+            : reduzirFoto(t.arquivo).then(function (f) {
+                if (f.size > LIMITE) throw new Error('Arquivo maior que ' + PAGINA.tamanhoMaxMB + ' MB. Para vídeos, envie o link do YouTube/Instagram.');
+                progresso(feitos, 0.25, total, 'Enviando ' + rotulo + ' ' + (i + 1) + ' de ' + total + '…');
+                return lerBase64(f).then(function (b64) {
+                  progresso(feitos, 0.45, total, 'Enviando ' + rotulo + ' ' + (i + 1) + ' de ' + total + '…');
+                  return Object.assign({}, base, { titulo: t.titulo, arquivo: { nome: f.name || t.arquivo.name, tipo: f.type || t.arquivo.type, base64: b64 } });
+                });
+              });
+
+          preparar
+            .then(function (dados) { return chamar('enviarMidia', sessao, dados); })
+            .then(function (r) {
+              if (r && r.ok) {
+                okList.push(t);
+                linha.className = 'ok';
+                linha.firstChild.className = 'fa-solid fa-circle-check';
+                linha.lastChild.textContent = (t.tipo === 'link' ? t.link : t.arquivo.name) + ' — recebido';
+              } else {
+                throw new Error((r && r.msg) || 'Falha no envio.');
+              }
+              if (r && r.expirou) sessao = null;
+            })
+            .catch(function (err) {
+              erros.push(t);
+              linha.className = 'erro';
+              linha.firstChild.className = 'fa-solid fa-circle-xmark';
+              var msg = (err && err.message) || 'Falha no envio.';
+              linha.lastChild.textContent = (t.tipo === 'link' ? t.link : t.arquivo.name) + ' — ' + msg;
+              if (/expirou|Limite de envios/i.test(msg)) sessao = null;
+            })
+            .finally(function () {
+              feitos++;
+              progresso(feitos, 0, total, feitos + ' de ' + total + ' concluído(s)');
+              if (!sessao) { concluir(); return; }
+              proxima(i + 1);
+            });
+        }
+
+        function concluir() {
+          if (!okList.length) {
+            $('form-envio').hidden = false;
+            $('btn-sair').hidden = false;
+            $('area-progresso').hidden = true;
+            var detalhe = Array.prototype.map.call($('resultado').querySelectorAll('li.erro span'), function (s) { return s.textContent; }).join(' | ');
+            if (!sessao) { mostrar('tela-pin'); erro('pin-erro', 'Seu acesso expirou. Digite o código novamente e reenvie.'); return; }
+            erro('envio-erro', 'Nada foi enviado. ' + detalhe);
+            return;
+          }
+          var fim = $('fim-lista');
+          fim.innerHTML = '';
+          Array.prototype.forEach.call($('resultado').children, function (li) { fim.appendChild(li.cloneNode(true)); });
+          $('fim-texto').textContent = okList.length + ' mídia(s) recebida(s) e aguardando aprovação.' +
+            (erros.length ? ' ' + erros.length + ' não puderam ser enviada(s): veja abaixo.' : '');
+          limparFormulario();
+          mostrar('tela-fim');
+        }
+
+        proxima(0);
+      });
+
+      function limparFormulario() {
+        selecionados.forEach(function (s) { URL.revokeObjectURL(s.url); });
+        selecionados = [];
+        desenharLista();
+        $('form-envio').reset();
+        $('contador').textContent = '0';
+        $('form-envio').hidden = false;
+        $('btn-sair').hidden = false;
+        $('area-progresso').hidden = true;
+        progresso(0, 0, 1, 'Preparando…');
+        erro('envio-erro', '');
+      }
+
+      $('btn-novo').addEventListener('click', function () {
+        if (!sessao) { mostrar('tela-pin'); return; }
+        mostrar('tela-envio');
+        $('titulo').focus();
+      });
+    })();
+  </script>
+</body>
+</html>
